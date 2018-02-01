@@ -1,0 +1,11 @@
+<project>
+
+	<!-- Database connection -->
+	<assertion name="db.driver"/>
+	<assertion name="db.url"/>
+	<assertion name="db.sid"/>
+
+	<!-- Database schema passwords -->
+	<assertion name="db.deploy.password"/>
+   
+</project>

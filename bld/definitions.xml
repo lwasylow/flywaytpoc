@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="definitions" xmlns:flyway="antlib:org.flywaydb.ant">
+
+   <macrodef name="flywayinfo">
+      <attribute name="user"/>
+      <attribute name="dburl" default="${db.url}"/>
+      <attribute name="password" default="${db.@{user}.password}" />
+      <attribute name="location" default="filesystem:${src.dir}/@{user}"/>
+      <sequential>
+            <echo></echo>
+            <echo>******************************************************</echo>
+            <echo>* SCHEMA INFO : @{user}</echo>
+            <echo>* Migration Dir: @{location}</echo>            
+            <echo>******************************************************</echo>
+            <flyway:info  password="@{password}" 
+                  url="@{dburl}" 
+                  user="@{user}"
+                  table="DB_VERSION">
+               <locations>
+                  <location path="@{location}"/>
+               </locations>                 
+            </flyway:info> 	
+      </sequential>
+   </macrodef>
+
+   <macrodef name="flywayvalidate">
+      <attribute name="user"/>
+      <attribute name="dburl" default="${db.url}"/>
+      <attribute name="password" default="${db.@{user}.password}" />
+      <attribute name="location" default="filesystem:${src.dir}/@{user}"/>
+      <sequential>
+            <echo></echo>
+            <echo>******************************************************</echo>
+            <echo>* SCHEMA INFO : @{user}</echo>
+            <echo>* Migration Dir: @{location}</echo>            
+            <echo>******************************************************</echo>
+            <flyway:validate  password="@{password}" 
+                  url="@{dburl}" 
+                  user="@{user}"
+                  table="DB_VERSION">
+               <locations>
+                  <location path="@{location}"/>
+               </locations>                 
+            </flyway:validate> 	
+      </sequential>
+   </macrodef>   
+
+   <macrodef name="recompileschema">
+      <attribute name="start" default="${scripts.dir}/recompile.sql"/>
+      <attribute name="schema" />
+      <attribute name="password" default="${db.@{schema}.password}"/>
+      <attribute name="logon" default="@{schema}/@{password}@${db.sid}"/>
+      <sequential>
+         <sqlplus logon="@{logon}" failonerror="true" silent="true" failOnSpoolMatch=".*ORA-.*|.*EOF detected.*|.*SP2-.*">
+            <![CDATA[
+WHENEVER SQLERROR EXIT FAILURE
+WHENEVER OSERROR EXIT FAILURE
+set feed off
+set verify off
+prompt Recompile schema : @{schema}
+start "@{start}" "@{schema}"
+]]>
+         </sqlplus>		
+      </sequential>
+   </macrodef>
+   
+   <macrodef name="dropschema">
+      <attribute name="logon" default="${db.deploy.user}/${db.deploy.password}@${db.sid}"/>
+      <attribute name="start" default="${scripts.dir}/drop_schema.sql"/>
+      <attribute name="schema" />
+      <sequential>
+         <sqlplus logon="@{logon}" failonerror="true" silent="true" failOnSpoolMatch=".*ORA-.*|.*EOF detected.*|.*SP2-.*">
+            <![CDATA[
+WHENEVER SQLERROR EXIT FAILURE
+WHENEVER OSERROR EXIT FAILURE
+set feed off
+set verify off
+prompt Dropping schema : @{schema}
+start "@{start}" "@{schema}"
+]]>
+         </sqlplus>		
+      </sequential>
+   </macrodef>
+
+   <macrodef name="droprole">
+      <attribute name="logon" default="${db.deploy.user}/${db.deploy.password}@${db.sid}"/>
+      <attribute name="start" default="${scripts.dir}/drop_role.sql"/>
+      <attribute name="role" />
+      <sequential>
+         <sqlplus logon="@{logon}" failonerror="true" silent="true" failOnSpoolMatch=".*ORA-.*|.*EOF detected.*|.*SP2-.*">
+            <![CDATA[
+WHENEVER SQLERROR EXIT FAILURE
+WHENEVER OSERROR EXIT FAILURE
+set feed off
+set verify off
+prompt Dropping role : @{role}
+start "@{start}" "@{role}"
+]]>
+         </sqlplus>		
+      </sequential>
+   </macrodef>
+
+   <macrodef name="drophistorylog">
+      <attribute name="logon" default="${db.deploy.user}/${db.deploy.password}@${db.sid}"/>
+      <attribute name="start" default="${scripts.dir}/drop_table.sql"/>
+      <attribute name="table" />
+      <sequential>
+         <sqlplus logon="@{logon}" failonerror="true" silent="true" failOnSpoolMatch=".*ORA-.*|.*EOF detected.*|.*SP2-.*">
+            <![CDATA[
+WHENEVER SQLERROR EXIT FAILURE
+WHENEVER OSERROR EXIT FAILURE
+set feed off
+set verify off
+prompt Dropping table : @{table}
+start "@{start}" "@{table}"
+]]>
+         </sqlplus>		
+      </sequential>
+   </macrodef>
+
+   <macrodef name="sqlplusci">
+      <attribute name="logon" />
+      <attribute name="start" />
+      <attribute name="dir" default=""/>
+      <attribute name="argv1" default="" />
+      <attribute name="argv2" default="" />
+      <attribute name="argv3" default="" />
+      <sequential>
+         <sqlplus logon="@{logon}" failonerror="true" silent="true" dir="@{dir}" failOnSpoolMatch=".*ORA-.*|.*EOF detected.*|.*SP2-.*">
+            <![CDATA[
+WHENEVER SQLERROR EXIT FAILURE
+WHENEVER OSERROR EXIT FAILURE
+set feed off
+set verify off
+prompt Executing resource: @{start}
+start "@{start}" @{argv1} @{argv2} @{argv3}
+]]>
+         </sqlplus>		
+      </sequential>
+   </macrodef>
+
+   <macrodef name="sqlldrci">
+      <attribute name="logon" />
+      <attribute name="control" />
+      <sequential>
+         <var name="basectrl" unset="true"/>
+         <basename property="basectrl" file="@{control}"/>
+         <echo>SQL*Loading @{control} ...</echo>
+         <sqlldr logon="@{logon}" failonerror="true">
+            control=@{control}
+            log="${basectrl}.log"
+         </sqlldr>
+      </sequential>
+   </macrodef>
+	
+</project>

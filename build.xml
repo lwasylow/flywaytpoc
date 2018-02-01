@@ -1,0 +1,172 @@
+<project name="FlywayAntPluginTest" xmlns:flyway="antlib:org.flywaydb.ant">
+
+   <!-- Load build properties -->
+   <property environment="env"/>
+   <property name="build.dir" location="bld"/>
+   <property name="prop.dir" location="${build.dir}/props"/>
+   <property name="lib.dir" location="${build.dir}/lib"/>
+   <property name="scripts.dir" location="${build.dir}/scripts"/>
+   <property name="src.dir" location="src"/>
+   <property name="ant.enable.asserts" value="true"/>
+   
+   <import   file="${build.dir}/definitions.xml"/>
+   
+   <path id="flyway.lib.path">
+      <fileset dir="${lib.dir}">
+         <include name="*.jar" />
+      </fileset>
+   </path>
+
+   <path id="flyway.classpath">
+      <fileset dir="${lib.dir}" includes="ojdbc7.jar"/>
+   </path>
+
+   <taskdef uri="antlib:org.flywaydb.ant" resource="org/flywaydb/ant/antlib.xml"
+         classpathref="flyway.lib.path"/>  
+
+
+   <taskdef name="sqlplus" classname="net.sf.incanto.Sqlplus" classpathref="flyway.lib.path"/>
+   <taskdef name="sqlldr" classname="net.sf.incanto.SqlLoader" classpathref="flyway.lib.path"/>
+   <taskdef name="assertion" classname="ise.antelope.tasks.Assert" classpathref="flyway.lib.path" />
+   <taskdef name="build_timer" classname="ise.antelope.tasks.StopWatchTask" classpathref="flyway.lib.path" />
+	<taskdef resource="net/sf/antcontrib/antlib.xml" classpathref="flyway.lib.path"/>
+   
+   <!-- Start a stopwatch for total time recording -->
+   <build_timer name="total_time"/>
+
+   <!-- Load Env specific properties -->
+   <assertion name="db"/>
+   <assertion message="Failed to locate ${prop.dir}/${db}.properties">
+      <bool>
+         <available file="${prop.dir}/${db}.properties"/>
+      </bool>
+   </assertion>
+   <property file="${prop.dir}/${db}.properties"/>
+   <property name="tmp.dir" value="tmp_${db.sid}"/>
+   <delete dir="${tmp.dir}"/>
+   <mkdir dir="${tmp.dir}"/>  
+
+   <!-- Assert that all required db properties are defined -->
+   <import file="${prop.dir}/db_prop_assertions.xml" />
+
+   <!-- Set common Parameters -->
+   <target name="setparameters">
+      <property name="flyway.baselineOnMigrate" value="true"/>
+      <property name="flyway.group" value="true"/>
+      <property name="flyway.installedBy" value="luw07"/>
+      <property name="flyway.sqlMigrationSuffixes" value=".sql,.pks,.pkb,.fnc,.trg"/>
+      <property name="flyway.placeholders.data.tablespace" value="${db.data.tablespace}"/>
+      <property name="flyway.placeholders.index.tablespace" value="${db.index.tablespace}"/>
+      <property name="flyway.placeholders.temp.tablespace" value="${db.temp.tablespace}"/>
+      <property name="flyway.placeholders.default.tablespace" value="${db.default.tablespace}"/>
+   </target>
+
+   <!-- Set OutOfOrder to allow patches, that not to be used in PRD -->
+   <target name="nonproductiondeployment">
+      <property name="flyway.outOfOrder" value="true"/>
+   </target>   
+   
+   <target name="privilegeduser" depends="setparameters">
+      <flyway:migrate  password="${db.deploy.password}" 
+            url="${db.url}" 
+            user="${db.deploy.user}"
+            table="DB_VERSION">
+         <locations>
+            <location path="filesystem:${src.dir}/privilegeduser"/>
+         </locations>  
+         <placeholders>
+            <placeholder name="test.password" value="${db.test.password}"/>
+            <placeholder name="test.profile" value="${db.test.profile}"/>
+            <placeholder name="test2.password" value="${db.test2.password}"/>
+            <placeholder name="test2.profile" value="${db.test2.profile}"/>
+         </placeholders>          
+      </flyway:migrate>                        
+   </target>
+
+   <target name="test" depends="setparameters">
+      <flyway:migrate  password="${db.test.password}" 
+            url="${db.url}" 
+            user="test"
+            table="DB_VERSION">
+         <locations>
+            <location path="filesystem:${src.dir}/test"/>
+         </locations>    
+         <placeholders>
+            <placeholder name="test.password" value="${db.test.password}"/>
+            <placeholder name="test.profile" value="${db.test.profile}"/>
+         </placeholders>          
+      </flyway:migrate> 
+   </target>
+
+   <target name="test2" depends="setparameters">
+      <flyway:migrate  password="${db.test2.password}" 
+            url="${db.url}" 
+            user="test2"
+            table="DB_VERSION">
+         <locations>
+            <location path="filesystem:${src.dir}/test2"/>
+         </locations>    
+         <placeholders>
+            <placeholder name="test2.password" value="${db.test2.password}"/>
+            <placeholder name="test2.profile" value="${db.test2.profile}"/>
+         </placeholders>           
+      </flyway:migrate> 
+   </target>
+
+   <target name="clean">
+      <droprole   role="appschema"/>
+      <dropschema schema="test"/>
+      <dropschema schema="test2"/>
+      <drophistorylog   table="DB_VERSION"/>
+   </target>
+
+   <target name="info-migration" depends="setparameters"> 
+      <record name="${tmp.dir}/info.log" action="start"/>
+      <flywayinfo user="${db.deploy.user}" password="${db.deploy.password}" location="filesystem:${src.dir}/privilegeduser"/>  
+      
+      <for list="test,test2" param="username">
+         <sequential>
+            <flywayinfo user="@{username}"/> 
+         </sequential>
+      </for>
+      <record name="${tmp.dir}/info.log" action="stop"/>
+   </target>
+
+   <target name="validate-migration" depends="setparameters"> 
+      
+      <record name="${tmp.dir}/validation.log" action="start"/>
+      <flywayinfo user="${db.deploy.user}" password="${db.deploy.password}" location="filesystem:${src.dir}/privilegeduser"/>  
+      
+      <for list="test,test2" param="username">
+         <sequential>
+            <flywayvalidate user="@{username}"/> 
+         </sequential>
+      </for>
+      <record name="${tmp.dir}/validation.log" action="stop"/>
+   </target>
+   
+   <target name="recompileall">
+      <recompileschema schema="${db.deploy.user}" password="${db.deploy.password}"/>
+
+      <for list="test,test2" param="username">
+         <sequential>
+            <recompileschema schema="@{username}"/>
+         </sequential>
+      </for>
+   
+   </target>
+   
+   <target name="startmigrationlog">
+      <record name="${tmp.dir}/migration.log" action="start"/>
+   </target>
+
+   <target name="stopmigrationlog">
+      <record name="${tmp.dir}/migration.log" action="stop"/>
+   </target>
+   
+   <target name="migrate" depends="startmigrationlog,privilegeduser,test,test2,recompileall,stopmigrationlog"/>
+   <target name="rebuild_migration" depends="clean,migrate"/>   
+   <target name="info" depends="info-migration"/>
+   <target name="validate" depends="validate-migration"/>
+</project>
+
